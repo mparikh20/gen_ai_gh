@@ -9,6 +9,11 @@ Overall use:
 
 Deep dive into how the code was developed:
 
+Note about API key:
+Currently the code is written without pulling any API key.
+Without a key, 3 requests per second are allowed.
+With an API key, 10 requests per second are allowed by default.
+
 '''
 
 # imports
