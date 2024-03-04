@@ -2,7 +2,6 @@
 '''
 Overall use:
 
-## LEFT - add email or other registration requirements from NCBI
 1. function that gets pmids - (caveat-limitation is only 10K for PubMed. E-direct command line utility can do >10K)
 2. function that takes in pmids and returns XML with abstracts
 3. function that extracts data from XML and saves it in a df, saves it.
@@ -38,6 +37,8 @@ def get_pmids(query: str,
         Uses the esearch utility to get PMIDs matching a search query
     Args:
         query = the query string to search for. It's a good idea to first test out the string on PubMed.
+                Please refer to https://pubmed.ncbi.nlm.nih.gov/help/#searching-by-date on how to query.
+                As a tip, use the Advanced Search tool on the website. Pasting the query verbatim as used on the website will also work.
         save_on_server = this is for the usehistory field within the search string shown below.
                          if 'y' : then it will save the results on the server which can be then retrieved for use in the efetch utility.
                          if '' : empty string means it will not save all the max. possible IDs on the server.
@@ -77,13 +78,39 @@ def get_pmids(query: str,
     search_output = response.json()
 
     num_result = search_output['esearchresult']['count']
-    num_ids = search_output['esearchresult']['idlist']
+    num_ids = len(search_output['esearchresult']['idlist'])
 
     print(f'The actual total number of records matching the search for {query} is {num_result}')
     print(f'The number of ids retrieved using the esearch utility is {num_ids}')
     print('Function get_pmids complete.')
 
     return search_output
+
+def query_and_ids(search_output):
+
+    '''
+    Description: Takes the json output and builds a df showing some search metadata.
+    Args:
+        search_output = json output from the get_pmids function
+    Returns:
+        A df with the following info: the actual query string used for searching, total count matching the query, actual number of results retrieved,
+        and all the PMIDs.
+    '''
+
+    # Create a df
+    results_df = pd.DataFrame({'query_string':[],
+                              'pmid':[],
+                              'num_total_matches':[],
+                              'num_retrieved_papers':[]}, dtype={'num_total_matches':'int32','num_retrieved_papers':'int32'})
+
+    # Capture metadata about the search results
+    results_df['pmid'] = search_output['esearchresult']['idlist']
+    results_df['query_string'] = search_output['esearchresult']['querytranslation']
+    results_df['num_total_matches'] = int(search_output['esearchresult']['count'])
+    results_df['num_retrieved_papers'] = len(search_output['esearchresult']['idlist'])
+
+    # Return df
+    return results_df
 
 def get_abstracts(search_output,
                   content_type: str,
