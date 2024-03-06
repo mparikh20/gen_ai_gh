@@ -219,8 +219,7 @@ def get_data_from_xml(ids_of_interest:list,
 
     print('Iterating through each article and collecting information.')
     # iterate through each paper
-    for count,child in enumerate(root.iter('PubmedArticle')):
-        print(f'>>>>>Processing paper {count}')
+    for child in root.iter('PubmedArticle'):
 
         # from each paper, get the information of interest : title, journal, publication date, abstract, keywords.
         # First create a variable to collect each piece of info.
