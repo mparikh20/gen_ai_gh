@@ -12,6 +12,8 @@ MODEL = 'gpt-4-turbo-preview'
 TOTAL_TOKENS = 120000
 TOKENS_PER_MESSAGE = 3
 REPLY_TOKENS = 3
+COST_PER_INPUT_TOKEN = 0.00001
+COST_PER_OUTPUT_TOKEN = 0.00003
 
 def select_pubmed_data(data_df,
                        cols:list,
@@ -35,6 +37,8 @@ def select_pubmed_data(data_df,
     else:
         data_df1 = data_df[~data_df[cols].isna()][cols].sample(n=num_rows,random_state=random_state)
 
+    print('Function select_pubmed_data complete.')
+
     return data_df1
 
 def clean_string(text):
@@ -53,6 +57,13 @@ def clean_string(text):
     return text
 
 def get_tokens_per_text(text:str,model=MODEL):
+    '''
+    Description: Calculates tokens from a string.
+    Args:
+        text = string
+        model = string indicating the model to use. This is already defined as a global variable above.
+    Returns: Number of tokens based on the input string
+    '''
 
     # Load the encoding model specific to the model, here: gpt-4-turbo-preview (this will usually point to their latest model)
     encoding = tiktoken.encoding_for_model(model)
@@ -65,9 +76,12 @@ def get_tokens_per_message(message_dict:dict,
                            add_tokens_per_message:bool,
                            model=MODEL):
     '''
-    Description:
+    Description: Calculates tokens for all values within a message (contained within a dicitonary.)
     Args:
-    Returns:
+        message_dict = dictionary with the typical 'role' and 'system' keys or according to the openai format.
+        add_tokens_per_message = boolean indicating whether to add priming tokens or not.
+                                 This value is already set as a global variable above.
+    Returns: number of tokens for an entire message dictionary
     '''
 
     # Calculate tokens
@@ -83,6 +97,13 @@ def get_tokens_per_message(message_dict:dict,
     return num_tokens
 
 def setup_client(openai_key_path):
+    '''
+    Description: Gets the API key and sets up the openai API client.
+    Args:
+        openai_key_path = str, path to the key
+    Returns:
+        client for calling the API
+    '''
     # Load the API key
     load_dotenv(dotenv_path=openai_key_path)
 
@@ -91,46 +112,73 @@ def setup_client(openai_key_path):
 
     client = OpenAI(api_key=openai_api_key)
 
+    print('Function setup_client complete.')
     return client
 
 def call_api(client,
              messages,
              seed:int,
              temperature:float):
-
-    response = client.chat.completions.create(model=MODEL,
-                                              response_format={ "type": "json_object" },
-                                              messages=messages,
-                                              seed=seed,
-                                              temperature=temperature
-                                              )
-    # The response JSON object can be loaded as a Python object
-    result = json.loads(response.model_dump_json())
-
-    # Make a dictionary to store relevant details
-    output = {}
-
-    # Extract relevant details
-    output['usage_dict'] = result['usage']
-
-    output['data_dict'] = json.loads(result['choices'][0]['message']['content'])
-
-    output['model_str'] = result['model']
-
-    output_id = result['id']
-
-    return output_id, output
-
-def process_pubmed_data(system_path,
-                        user_path,
-                        data_df1,
-                        openai_key_path,
-                        seed,
-                        temperature):
     '''
-    Description:
+    Description: Makes 1 API call, gets the completion json object, and extracts only specific details from it into a dictionary.
     Args:
+        client = client setup to call the API (output of setup_client function)
+        messages = a list of dictionaries, each representing 1 message according to the openai format
+        seed = a seed to make sure the same output type is generated upon re-running the same prompt (this is not always guaranteed)
+        temperature = a float in the range of 0-2 indicating how creative the responses should be.
+                      Use lower temperatures for consistent & conservative response and higher values for creative responses.
+    Returns: (1) API call id and (2) a dictionary with usage, task completion output, and model used
+    '''
+
+    temperature = round(float(temperature),1)
+
+    # Check the temperature parameter is within allowable range:
+    if 0.0 <= round(temperature,1) <= 2.0:
+        response = client.chat.completions.create(model=MODEL,
+                                                  response_format={ "type": "json_object" },
+                                                  messages=messages,
+                                                  seed=seed,
+                                                  temperature=temperature
+                                              )
+        # The response JSON object can be loaded as a Python object
+        result = json.loads(response.model_dump_json())
+
+        # Make a dictionary to store relevant details
+        output = {}
+
+        # Extract relevant details
+        output['usage_dict'] = result['usage']
+
+        output['data_dict'] = json.loads(result['choices'][0]['message']['content'])
+
+        output['model_str'] = result['model']
+
+        output_id = result['id']
+
+        print('Function call_api complete.')
+        return output_id, output
+
+    else:
+        print(f'Input temperature {temperature} is out of range 0-2.')
+
+def process_pubmed_data(system_path: str,
+                        user_path: str,
+                        data_df1: pd.DataFrame,
+                        openai_key_path: str,
+                        seed:int,
+                        temperature:float)->dict:
+    '''
+    Description: Takes a df containing pubmed data and makes an API call for completing specified tasks for each PMID.
+    Args:
+        system_data = str, path to the json file containing the system message
+        user_path = str, path to the json file containing the system message
+        data_df1 = df containing pmid and abstracts
+        openai_key_path = path to the API key
+        seed = a seed to make sure the same output type is generated upon re-running the same prompt (this is not always guaranteed)
+        temperature = a float in the range of 0-2 indicating how creative the responses should be.
+                      Use lower temperatures for consistent & conservative response and higher values for creative responses.
     Returns:
+
     '''
 
     # Load the json file containing the system message
@@ -166,7 +214,10 @@ def process_pubmed_data(system_path,
     pmids = data_df1['pmid'].values
 
     # Make a dictionary to collect completions for each API call.
-    outputs = {}
+    all_completions = {}
+
+    # Track cost
+    cost = 0.00
 
     # Setup client
     client = setup_client(openai_key_path)
@@ -177,18 +228,21 @@ def process_pubmed_data(system_path,
         # Get the abstract string for a PMID
         abstract_text = data_df1[data_df1['pmid']==pmid]['abstract'].values[0]
 
+        # Clean the string if required
+        cleaned_abstract = clean_string(abstract_text)
+
         # Add the ID in front of the text
-        abstract_text = '\n' + f'PMID{str(pmid)}:{abstract_text}'
+        text_to_append = '\n' + f'PMID{str(pmid)}:{cleaned_abstract}'
 
         # Get token count from this abstract
-        abstract_tokens = get_tokens_per_text(text=abstract_text,model=MODEL)
+        abstract_tokens = get_tokens_per_text(text=text_to_append,model=MODEL)
 
         # Check if adding the text will keep it within the token limit
         if (calculated_tokens + abstract_tokens + REPLY_TOKENS) <= TOTAL_TOKENS:
             # If yes, append the text to the user prompt
             updated_user_data = user_data.copy()
 
-            updated_user_data['content'] += abstract_text
+            updated_user_data['content'] += text_to_append
 
             # Construct the messages list which will go into the chat completions API as an argument
             messages = [system_data,updated_user_data]
@@ -200,10 +254,13 @@ def process_pubmed_data(system_path,
                                          temperature=temperature)
 
             # Add the dictionary output with it's API call identifier
-            outputs[output_id] = output
+            all_completions[output_id] = output
+
+            # Get actual cost
+            cost += (output['usage_dict']['completion_tokens'] * COST_PER_OUTPUT_TOKEN) + (output['usage_dict']['prompt_tokens'] * COST_PER_INPUT_TOKEN)
 
         else:
             print(f'Skipping PMID {pmid} due to token limitations.')
 
-    return outputs
-
+    print(f'Function process_pubmed_data complete. The cost of the run is {round(cost,2)}.')
+    return all_completions
