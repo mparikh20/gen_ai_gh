@@ -1,6 +1,14 @@
 '''
 Overview:
-
+This module is written for processing pubmed abstracts and extracting entities such as drug names and target names.
+It has functions for the following steps:
+1. Randomly select rows from a df that contains the main columns from which text needs to be taken and passed into the API calls.
+2. Each abstract is taken and appended to a user message.
+3. System and user messages are passed into the API, creating a completion for 1 abstract.
+Right now, the pipeline calls 1 API per abstract.
+It is possible to modify it in the future so that it appends multiple abstract text chunks in a single API call as long as the total tokens are within the limit of the context window.
+4. All completions coming from all processed abstracts are collected in a single json.
+5. Contents from json are extracted and organized into a df.
 '''
 # imports
 import json
@@ -10,7 +18,7 @@ from openai import OpenAI
 import pandas as pd
 import tiktoken
 
-# specify global variables (MAKE UPPER)
+# specify global variables
 MODEL = 'gpt-4-turbo-preview'
 TOTAL_TOKENS = 120000
 TOKENS_PER_MESSAGE = 3
