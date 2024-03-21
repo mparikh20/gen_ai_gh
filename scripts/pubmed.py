@@ -355,5 +355,8 @@ def run_pubmed_pipeline(query,
     for col,val in metadata_dict.items():
         papers_df[col] = val
 
+    # Cast the PMID column as a string and not int
+    papers_df['pmid'] = papers_df['pmid'].astype('str')
+
     print('Pipeline complete, dataframe ready.')
     return papers_df
