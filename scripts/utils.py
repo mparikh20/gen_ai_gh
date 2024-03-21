@@ -2,6 +2,10 @@
 '''
 Overview
 This module has functions that can be used with Google APIs or other data sources.
+
+Refs:
+This article has instructions on setting up service accounts in the GCP console:
+https://medium.com/@jb.ranchana/write-and-append-dataframes-to-google-sheets-in-python-f62479460cf0
 '''
 
 # imports
