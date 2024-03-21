@@ -13,6 +13,7 @@ It is possible to modify it in the future so that it appends multiple abstract t
 # imports
 import json
 import os
+from datetime import datetime
 from dotenv import load_dotenv
 from openai import OpenAI
 import pandas as pd
@@ -44,10 +45,10 @@ def select_pubmed_data(data_df,
     '''
     if num_rows is None:
         # Select columns of interest and rows with information
-        data_df1 = data_df[data_df[cols].notna().all(axis=1)]
+        data_df1 = data_df[data_df[cols].notna().all(axis=1)][cols]
 
     else:
-        data_df1 = data_df[data_df[cols].notna().all(axis=1)].sample(n=num_rows,random_state=random_state)
+        data_df1 = data_df[data_df[cols].notna().all(axis=1)][cols].sample(n=num_rows,random_state=random_state)
 
     print('Function select_pubmed_data complete.')
 
@@ -147,7 +148,8 @@ def call_api(client,
     # Iterature through dictionaries until the word json is found.
     # This is a very cursory check.
     for message in messages:
-        if search_term in message.values():
+        all_text = " ".join(message.values())
+        if search_term.upper() in all_text or search_term.lower() in all_text:
             status=True
             break
 
@@ -176,10 +178,10 @@ def call_api(client,
 
             output_id = result['id']
 
-            print('Function call_api complete.')
+            # print('Function call_api complete.')
             return output_id, output
 
-        print(f'Input temperature {temperature} is out of range 0-2.')
+    print(f'Input temperature {temperature} is out of range 0-2.')
 
 def process_pubmed_data(system_path: str,
                         user_path: str,
@@ -203,6 +205,8 @@ def process_pubmed_data(system_path: str,
     '''
 
     # Load the json file containing the system message
+    start_time = datetime.now()
+
     with open(system_path, "r") as json_file:
         system_data = json.load(json_file)
 
@@ -282,7 +286,8 @@ def process_pubmed_data(system_path: str,
             else:
                 print(f'\tSkipping PMID {pmid} due to token limitations.')
 
-        print(f'\tFunction process_pubmed_data complete. This run costed ${round(cost,2)}.')
+        end_time = datetime.now()
+        print(f'Function process_pubmed_data complete in {end_time-start_time}. This run costed ${round(cost,2)}.')
         return all_completions
 
     print('One or both of the pmid and abstract columns are not present in the input df. Exiting the function.')
@@ -298,7 +303,11 @@ def get_df_from_completions(all_completions:dict):
     # Collect all the df rows as dicts in this main list
     main_data = []
 
+    # In case no data was collected for some PMID,collect them in a list and then these will be added back to the final df later
+    missing_pmids = []
+
     # Go through each dictiionary, each pointing to a completion from a single API call.
+    # First level will be a completion id
     for key,value in all_completions.items():
         main_row = {}
 
@@ -319,6 +328,11 @@ def get_df_from_completions(all_completions:dict):
                         pmid_val = data_key[4:]
                         # data_val will be a list of dictionaries, with each dict pointing to a drug
                         # each dictionary should be for each drug within the abstract
+
+                        if len(data_val) == 0:
+                            # collect the PMID separately to add back to the df.
+                            missing_pmids.append(pmid_val)
+
                         for drug_dict in data_val:
                             add_row = {}
                             add_row['drug_name'] = drug_dict['drug name']
@@ -348,6 +362,15 @@ def get_df_from_completions(all_completions:dict):
             rename_cols[col] = new_name
 
     main_df.rename(columns=rename_cols,inplace=True)
+
+    # Add back PMIDs for which no data was extracted by the API
+    if len(missing_pmids) > 0:
+        missing_df = pd.DataFrame({'pmid':missing_pmids})
+        main_df = pd.merge(main_df,
+                           missing_df,
+                           how='outer',
+                           on='pmid')
+
     print('Function get_df_from_completions complete.')
 
     return main_df
