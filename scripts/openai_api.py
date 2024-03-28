@@ -17,6 +17,7 @@ from datetime import datetime
 from dotenv import load_dotenv
 from openai import OpenAI
 import pandas as pd
+import numpy as np
 import tiktoken
 
 # specify global variables
@@ -370,6 +371,14 @@ def get_df_from_completions(all_completions:dict):
                            missing_df,
                            how='outer',
                            on='pmid')
+
+    # Replace empty lists to None
+    main_df = main_df.applymap(lambda x: None if isinstance(x, list) and len(x) == 0 else x)
+
+    # Replace lists containing null string to None
+    main_df = main_df.applymap(lambda x: None if isinstance(x, list) and x[0]=='null' else x)
+
+    main_df.replace({np.nan:None}, inplace=True)
 
     print('Function get_df_from_completions complete.')
 
