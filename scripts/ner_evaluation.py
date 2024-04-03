@@ -64,9 +64,13 @@ def get_drug_metrics(model_df,
                 # Get fuzzy matching score
                 score = fuzz.token_set_ratio(model_drug,gtruth_drug)
 
+                # Stop searching for a match with ground truth drugs once a match is found.
+                '''Adding this break ensures that if there are 2 similar analogs of a drug in the gound truth set
+                and the model extracts only 1, then that difference will be accounted here.'''
                 if score == 100:
                     match = True
                     gtruth_matched.add(gtruth_drug)
+                    break
 
             if match is True:
                 metrics['tp'] += 1
