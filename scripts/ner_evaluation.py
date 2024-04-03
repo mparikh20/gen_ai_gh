@@ -11,9 +11,7 @@ def get_pmids_without_entity(df,
                              entity_column_name:str):
 
 
-    indices = np.where(df.groupby('pmid')[entity_column_name].nunique() ==0)
-
-    pmids = df.loc[indices]['pmid'].unique()
+    pmids = df.groupby('pmid')[entity_column_name].nunique()[lambda x: x==0].index
 
     return pmids
 
@@ -25,7 +23,11 @@ def get_drug_metrics(model_df,
     Args:
     Returns:
     '''
+    # Keep count of the metrics
     metrics = {'tp':0,'fp':0,'fn':0, 'tn':0}
+
+    # Dictionary to ID where the errors are; list will PMIDs
+    pmids_errors = {'fp':[],'fn':[]}
 
     all_pmids = set(model_df['pmid'].unique())
 
@@ -66,14 +68,49 @@ def get_drug_metrics(model_df,
                     match = True
                     gtruth_matched.add(gtruth_drug)
 
-            if match == True:
+            if match is True:
                 metrics['tp'] += 1
             else:
                 metrics['fp'] += 1
+                pmids_errors['fp'].append(pmid)
 
         # Whichever drugs from ground truth that didn't get matched at all are false negatives that the model failed to extract
         fn_drugs = set(gtruth_drugs).difference(gtruth_matched)
-        metrics['fn'] += len(fn_drugs)
 
-    return metrics
+        # Remove any None values; these will still count towards the length
+        fn_drugs_filtered = {x for x in fn_drugs if x is not None}
 
+        if len(fn_drugs_filtered) > 0:
+            # If false negative are found, collect the PMID for tracing the errors later
+            pmids_errors['fn'].append(pmid)
+            print(f'PMID {pmid}: {len(fn_drugs_filtered)} false negatives.')
+        metrics['fn'] += len(fn_drugs_filtered)
+
+    return metrics, pmids_errors
+
+def calculate_metrics(metrics:dict):
+    '''
+    Description:
+    Args:
+    Returns:
+    '''
+    eval_metrics = {}
+    accuracy = (metrics['tp']+metrics['tn']) / (metrics['tp'] + metrics['tn'] + metrics['fp'] + metrics['fn'])
+
+    # Calculate precision
+    precision = metrics['tp'] / (metrics['tp'] + metrics['fp'])
+
+    # Calculate recall
+    recall = metrics['tp'] / (metrics['tp'] + metrics['fn'])
+
+    f1_score = 2 * ((precision*recall) / (precision+recall))
+
+    neg_pred_value = metrics['tn'] / (metrics['tn']+metrics['fn'])
+
+    eval_metrics['accuracy']=round(accuracy,2)
+    eval_metrics['precision']=round(precision,2)
+    eval_metrics['recall']=round(recall,2)
+    eval_metrics['f1_score']=round(f1_score,2)
+    eval_metrics['neg_pred_value']=round(neg_pred_value,2)
+
+    return eval_metrics
