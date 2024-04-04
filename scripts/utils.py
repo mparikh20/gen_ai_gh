@@ -9,8 +9,10 @@ https://medium.com/@jb.ranchana/write-and-append-dataframes-to-google-sheets-in-
 '''
 
 # imports
+import ast
 import gspread
 from google.oauth2.service_account import Credentials
+import numpy as np
 import pandas as pd
 import string
 
@@ -112,7 +114,33 @@ def read_data_from_sheets(credentials_path:str,
     # After filling empty column with empty strings, write data into a df
     data = worksheet.get(range_to_write)
 
-    # # Load the data into a df
+    # Load the data into a df
     df = pd.DataFrame(data[1:],columns=data[0])
 
+    return df
+
+def convert_string_to_structure(value):
+    '''
+    Description: Takes a string and processes it into a Python data structure that could be contained within a string
+                 eg. "['a','b','c']" string will be converted to ['a','b','c'] list
+                 This is useful to pass as a 'converters' while reading a CSV (if located in the same directory) or apply after the df has been loaded
+    Args:
+        value = string
+    Returns: relevant Python data structure
+    '''
+    try:
+        return ast.literal_eval(value)
+    except (ValueError,SyntaxError):
+        return value
+
+def clean_missing_data(df):
+    '''
+    Description: Replaces the following types of missing data to None values.
+    Args:
+        df
+    Returns: Cleaned up df
+    '''
+
+    df.replace({np.nan:None,
+                '':None}, inplace=True)
     return df

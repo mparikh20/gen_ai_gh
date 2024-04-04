@@ -51,10 +51,10 @@ def get_drug_metrics(model_df,
         gtruth_matched = set()
 
         # Get drugs extracted by the model for this paper
-        model_drugs = model_df[model_df['pmid']==pmid]['drug_name'].unique()
+        model_drugs = model_df[model_df['pmid']==pmid]['drug_name'].unique().tolist()
 
         # Get drugs present in ground truth curate data for this paper
-        gtruth_drugs = gtruth_df[gtruth_df['pmid']==pmid]['drug_name'].unique()
+        gtruth_drugs = gtruth_df[gtruth_df['pmid']==pmid]['drug_name'].unique().tolist()
 
         # Now take each drug extracted by the model and compare it to see if it matches each of the drugs present in the ground truth list
         for model_drug in model_drugs:
@@ -70,6 +70,7 @@ def get_drug_metrics(model_df,
                 if score == 100:
                     match = True
                     gtruth_matched.add(gtruth_drug)
+                    gtruth_drugs.remove(gtruth_drug)
                     break
 
             if match is True:
