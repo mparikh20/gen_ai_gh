@@ -7,6 +7,7 @@ Overview
 # imports
 import json
 import os
+from collections import defaultdict
 from datetime import datetime
 from dotenv import load_dotenv
 from openai import OpenAI
@@ -105,30 +106,23 @@ def create_one_example(system_data:dict,
 
 def prepare_train_val_data(main_df,
                            test_ids:list,
-                           training_fraction:float,
                            system_path:str,
                            user_path:str,
                            pubmed_df,
                            training_path,
-                           validation_path):
+                           test_path):
     '''
     '''
     # Remove test set rows
-    main_df2 = main_df[~main_df['pmid'].isin(test_ids)].copy()
+    training_df = main_df[~main_df['pmid'].isin(test_ids)].copy()
 
-    # Randomly select a fraction of pmids that should be for training
-    train_ids = main_df2[['pmid']].drop_duplicates().sample(frac=training_fraction,random_state=1,replace=False)['pmid'].unique()
-
-    # Get training df
-    training_df = main_df2[main_df2['pmid'].isin(train_ids)].copy()
-
-    # Remaining ids will go into the validation set
-    validation_df = main_df2[~main_df2['pmid'].isin(train_ids)].copy()
+    # Remaining ids will go into the test set
+    test_df = main_df[main_df['pmid'].isin(test_ids)].copy()
 
     # Get a list of dictionaries from the dfs
     training_list = rows_to_dict(training_df)
 
-    validation_list = rows_to_dict(validation_df)
+    test_list = rows_to_dict(test_df)
 
     # Load the json file containing the system message
     system_data = load_json(system_path)
@@ -136,10 +130,11 @@ def prepare_train_val_data(main_df,
     # Load the json file containing the starting user message or instructions.
     user_data = load_json(user_path)
 
+    # Create lists for storing all example dictionaries.
     training_examples = []
-
-    validation_examples = []
+    test_examples = []
     # Loop through each output/example dictionary and create a message dictionary from each.
+
     for output_dict in training_list:
         # Create a single example message dictionary and store it in a list
         example = create_one_example(system_data=system_data,
@@ -149,13 +144,13 @@ def prepare_train_val_data(main_df,
 
         training_examples.append(example)
 
-    for output_dict in validation_list:
+    for output_dict in test_list:
         example = create_one_example(system_data=system_data,
                                      user_data=user_data,
                                      output_dict=output_dict,
                                      pubmed_df=pubmed_df)
 
-        validation_examples.append(example)
+        test_examples.append(example)
 
     # Create jsonl files
     with open(training_path, "w", encoding="utf-8") as trainfile:
@@ -163,8 +158,61 @@ def prepare_train_val_data(main_df,
             json.dump(item, trainfile)
             trainfile.write('\n')
 
-    with open(validation_path, "w", encoding="utf-8") as valfile:
-        for item in validation_examples:
-            json.dump(item, valfile)
-            valfile.write('\n')
+    with open(test_path, "w", encoding="utf-8") as testfile:
+        for item in test_examples:
+            json.dump(item, testfile)
+            testfile.write('\n')
+
+def check_data_formatting(jsonl_path):
+    '''
+    Copied from openAI's website - their code checks if the jsonl files are formatted properly for the model.
+    '''
+    # Load the dataset
+    with open(jsonl_path, 'r', encoding='utf-8') as f:
+        dataset = [json.loads(line) for line in f]
+
+    # Initial dataset stats
+    print("Num examples:", len(dataset))
+    print("First example:")
+    for message in dataset[0]["messages"]:
+        print(message)
+
+    # Format error checks
+    format_errors = defaultdict(int)
+
+    for ex in dataset:
+        if not isinstance(ex, dict):
+            format_errors["data_type"] += 1
+            continue
+
+        messages = ex.get("messages", None)
+        if not messages:
+            format_errors["missing_messages_list"] += 1
+            continue
+
+        for message in messages:
+            if "role" not in message or "content" not in message:
+                format_errors["message_missing_key"] += 1
+
+            if any(k not in ("role", "content", "name", "function_call", "weight") for k in message):
+                format_errors["message_unrecognized_key"] += 1
+
+            if message.get("role", None) not in ("system", "user", "assistant", "function"):
+                format_errors["unrecognized_role"] += 1
+
+            content = message.get("content", None)
+            function_call = message.get("function_call", None)
+
+            if (not content and not function_call) or not isinstance(content, str):
+                format_errors["missing_content"] += 1
+
+        if not any(message.get("role", None) == "assistant" for message in messages):
+            format_errors["example_missing_assistant_message"] += 1
+
+    if format_errors:
+        print("Found errors:")
+        for k, v in format_errors.items():
+            print(f"{k}: {v}")
+    else:
+        print("No errors found")
 
