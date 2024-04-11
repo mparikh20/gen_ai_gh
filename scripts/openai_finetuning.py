@@ -12,11 +12,23 @@ from datetime import datetime
 from dotenv import load_dotenv
 from openai import OpenAI
 import numpy as np
+import openai_api
 import pandas as pd
+import tiktoken
 import utils
 
 # specify global variables
-# MODEL = 'gpt-4-turbo-preview'
+# this is the recommended model for fine-tuning
+MODEL = 'gpt-3.5-turbo-0125'
+TOKENS_PER_MESSAGE = 3
+TOKEN_LIMIT = 16385
+COST_TRAIN_TOKEN = (8/1000000)
+TARGET_EPOCHS = 3
+MIN_DEFAULT_EPOCHS = 1
+MAX_DEFAULT_EPOCHS = 25
+MIN_TARGET_EXAMPLES = 100
+MAX_TARGET_EXAMPLES = 25000
+
 
 def load_json(json_path):
 
@@ -24,21 +36,6 @@ def load_json(json_path):
         data = json.load(json_file)
 
         return data
-
-def clean_string(text):
-    '''
-    Description: Takes a string and performs a cleaning step to remove any trailing spaces and double spaces.
-    Args:
-        text = string
-    Returns: cleaned up string
-    '''
-
-    if isinstance(text,str):
-
-        # remove leading or trailing spaces and replace double spaces with a single space.
-        text = text.strip().replace("  "," ")
-
-    return text
 
 def get_test_set_ids(test_df,
                      id_column):
@@ -87,7 +84,7 @@ def create_one_example(system_data:dict,
     abstract_text = pubmed_df[pubmed_df['pmid']==pmid]['abstract'].values[0]
 
     # Clean the string if required
-    cleaned_abstract = clean_string(abstract_text)
+    cleaned_abstract = openai_api.clean_string(abstract_text)
 
     # Add the PMID and abstract to the base user message
     text_to_append = '\n' + f'{str(pmid)}:{cleaned_abstract}'
@@ -215,4 +212,93 @@ def check_data_formatting(jsonl_path):
             print(f"{k}: {v}")
     else:
         print("No errors found")
+def get_tokens_per_text(text:str,
+                        model=MODEL):
+    '''
+    Description: Calculates tokens from a string.
+    Args:
+        text = string
+        model = string indicating the model to use. This is already defined as a global variable above.
+    Returns: Number of tokens based on the input string
+    '''
+    # Load the encoding model specific to the model, here: gpt-4-turbo-preview (this will usually point to their latest model)
+    encoding = tiktoken.encoding_for_model(model)
+
+    num_tokens = len(encoding.encode(text))
+
+    return num_tokens
+
+def get_tokens_per_message(message_dict:dict,
+                           add_tokens_per_message:bool,
+                           model=MODEL):
+    '''
+    Description: Calculates tokens for all values within a message (contained within a dicitonary.)
+    Args:
+        message_dict = dictionary with the typical 'role' and 'system' keys or according to the openai format.
+        add_tokens_per_message = boolean indicating whether to add priming tokens or not.
+                                 This value is already set as a global variable above.
+    Returns: number of tokens for an entire message dictionary
+    '''
+
+    # Calculate tokens
+    num_tokens = 0
+    for value in message_dict.values():
+        num_tokens += get_tokens_per_text(text=value,model=model)
+
+    # Add priming tokens per message if required
+    if add_tokens_per_message:
+
+        num_tokens += TOKENS_PER_MESSAGE
+
+    return num_tokens
+
+def estimate_finetuning_cost(jsonl_path:str):
+    '''
+    '''
+    # Load the jsonl file into a list of messages dictionaries, each one pointing to 1 example
+    with open(jsonl_path, 'r', encoding='utf-8') as f:
+        examples = [json.loads(line) for line in f]
+
+    token_limit_exceeded = 0
+    token_values = []
+
+    for example in examples:
+        # messages is a list of 3 dictionaries - system,user, and assistant
+        messages = example.get('messages')
+        tokens_per_example = 0
+        # For each message dictionary, calculate tokens
+        for message in messages:
+            num_tokens = get_tokens_per_message(message_dict=message,
+                                                add_tokens_per_message=True,
+                                                model=MODEL)
+            tokens_per_example += num_tokens
+
+        if tokens_per_example >= TOKEN_LIMIT:
+            token_limit_exceeded += 1
+
+        token_values.append(tokens_per_example)
+
+    total_tokens = sum(token_values)
+    print(f'Max tokens in 1 example: {max(token_values)}')
+    print(f'Number of examples where token limit exceeded {TOKEN_LIMIT}: {token_limit_exceeded}')
+    print(f'Total number of tokens: {total_tokens}')
+
+    n_examples = len(examples)
+
+    print(f'There are {n_examples} examples in the finetuning dataset.')
+
+    n_epochs = TARGET_EPOCHS
+    if n_examples * TARGET_EPOCHS < MIN_TARGET_EXAMPLES:
+        n_epochs = min(MAX_DEFAULT_EPOCHS, MIN_TARGET_EXAMPLES // n_examples)
+
+    elif n_examples * TARGET_EPOCHS > MAX_TARGET_EXAMPLES:
+        n_epochs = max(MIN_DEFAULT_EPOCHS, MAX_TARGET_EXAMPLES // n_examples)
+
+    print(f'Based on default epoch and training example numbers, epochs should be {n_epochs}.')
+
+    tokens_charged = total_tokens * n_epochs
+
+    total_cost = round(COST_TRAIN_TOKEN * tokens_charged,2)
+
+    print(f'Based on the finetuning cost of ${COST_TRAIN_TOKEN} per token, estimated cost is ${total_cost} for a dataset with {n_examples} examples and {total_tokens} tokens.')
 
