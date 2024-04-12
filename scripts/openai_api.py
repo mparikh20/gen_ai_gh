@@ -9,6 +9,7 @@ Right now, the pipeline calls 1 API per abstract.
 It is possible to modify it in the future so that it appends multiple abstract text chunks in a single API call as long as the total tokens are within the limit of the context window.
 4. All completions coming from all processed abstracts are collected in a single json.
 5. Contents from json are extracted and organized into a df.
+
 '''
 # imports
 import json
@@ -20,13 +21,14 @@ import pandas as pd
 import numpy as np
 import tiktoken
 
-# specify global variables
-MODEL = 'gpt-4-turbo-preview'
-TOTAL_TOKENS = 120000
-TOKENS_PER_MESSAGE = 3
-REPLY_TOKENS = 3
-COST_PER_INPUT_TOKEN = 0.00001
-COST_PER_OUTPUT_TOKEN = 0.00003
+# default model specific variables
+# For inference using a non-finetuned GPT4 model, these values were collected from OpenAI pricing docs.
+DEFAULT_MODEL = 'gpt-4-turbo-preview'
+DEFAULT_TOTAL_TOKENS = 120000
+DEFAULT_TOKENS_PER_MESSAGE = 3
+DEFAULT_REPLY_TOKENS = 3
+DEFAULT_COST_PER_INPUT_TOKEN = 0.00001
+DEFAULT_COST_PER_OUTPUT_TOKEN = 0.00003
 
 def select_pubmed_data(data_df,
                        cols:list,
@@ -71,7 +73,7 @@ def clean_string(text):
     return text
 
 def get_tokens_per_text(text:str,
-                        model=MODEL):
+                        model=DEFAULT_MODEL):
     '''
     Description: Calculates tokens from a string.
     Args:
@@ -88,7 +90,8 @@ def get_tokens_per_text(text:str,
 
 def get_tokens_per_message(message_dict:dict,
                            add_tokens_per_message:bool,
-                           model=MODEL):
+                           model=DEFAULT_MODEL,
+                           tokens_per_message=DEFAULT_TOKENS_PER_MESSAGE):
     '''
     Description: Calculates tokens for all values within a message (contained within a dicitonary.)
     Args:
@@ -97,7 +100,6 @@ def get_tokens_per_message(message_dict:dict,
                                  This value is already set as a global variable above.
     Returns: number of tokens for an entire message dictionary
     '''
-
     # Calculate tokens
     num_tokens = 0
     for value in message_dict.values():
@@ -106,7 +108,7 @@ def get_tokens_per_message(message_dict:dict,
     # Add priming tokens per message if required
     if add_tokens_per_message:
 
-        num_tokens += TOKENS_PER_MESSAGE
+        num_tokens += tokens_per_message
 
     return num_tokens
 
@@ -132,7 +134,8 @@ def setup_client(openai_key_path):
 def call_api(client,
              messages,
              seed:int,
-             temperature:float):
+             temperature:float,
+             model=DEFAULT_MODEL):
     '''
     Description: Makes 1 API call, gets the completion json object, and extracts only specific details from it into a dictionary.
     Args:
@@ -159,7 +162,7 @@ def call_api(client,
 
         # Check the temperature parameter is within allowable range:
         if 0.0 <= round(temperature,1) <= 2.0:
-            response = client.chat.completions.create(model=MODEL,
+            response = client.chat.completions.create(model=model,
                                                       response_format={ "type": "json_object" },
                                                       messages=messages,
                                                       seed=seed,
@@ -189,7 +192,12 @@ def process_pubmed_data(system_path: str,
                         data_df1: pd.DataFrame,
                         openai_key_path: str,
                         seed:int,
-                        temperature:float)->dict:
+                        temperature:float,
+                        model=DEFAULT_MODEL,
+                        reply_tokens=DEFAULT_REPLY_TOKENS,
+                        total_tokens=DEFAULT_TOTAL_TOKENS,
+                        cost_per_input_token=DEFAULT_COST_PER_INPUT_TOKEN,
+                        cost_per_output_token=DEFAULT_COST_PER_OUTPUT_TOKEN)->dict:
     '''
     Description: Takes a df containing pubmed data and makes an API call for completing specified tasks for each PMID.
     Args:
@@ -220,11 +228,11 @@ def process_pubmed_data(system_path: str,
     # Get number of tokens for the base message and get an updated starting value for number of tokens
     system_tokens = get_tokens_per_message(message_dict=system_data,
                                            add_tokens_per_message=True,
-                                           model=MODEL)
+                                           model=model)
 
     user_tokens = get_tokens_per_message(message_dict=user_data,
                                          add_tokens_per_message=True,
-                                         model=MODEL)
+                                         model=model)
 
     # Add all tokens coming from the base message as well as some tokens alloted from the completion.
     calculated_tokens = system_tokens + user_tokens
@@ -260,10 +268,10 @@ def process_pubmed_data(system_path: str,
             text_to_append = '\n' + f'PMID{str(pmid)}:{cleaned_abstract}'
 
             # Get token count from this abstract
-            abstract_tokens = get_tokens_per_text(text=text_to_append,model=MODEL)
+            abstract_tokens = get_tokens_per_text(text=text_to_append,model=model)
 
             # Check if adding the text will keep it within the token limit
-            if (calculated_tokens + abstract_tokens + REPLY_TOKENS) <= TOTAL_TOKENS:
+            if (calculated_tokens + abstract_tokens + reply_tokens) <= total_tokens:
                 # If yes, append the text to the user prompt
                 updated_user_data = user_data.copy()
 
@@ -281,8 +289,7 @@ def process_pubmed_data(system_path: str,
                 # Add the dictionary output with it's API call identifier
                 all_completions[output_id] = output
 
-                # Get actual cost
-                cost += (output['usage_dict']['completion_tokens'] * COST_PER_OUTPUT_TOKEN) + (output['usage_dict']['prompt_tokens'] * COST_PER_INPUT_TOKEN)
+                cost += (output['usage_dict']['completion_tokens'] * cost_per_output_token) + (output['usage_dict']['prompt_tokens'] * cost_per_input_token)
 
             else:
                 print(f'\tSkipping PMID {pmid} due to token limitations.')
@@ -340,16 +347,20 @@ def get_df_from_completions(all_completions:dict):
                             add_row['tested_or_effective_group'] = drug_dict['tested or effective group']
                             add_row['drug_tested_in_diseases'] = drug_dict['drug tested in following diseases']
                             add_row['clinical_trials_id'] = drug_dict['ClinicalTrials.gov ID']
+                            add_row['pmid'] = pmid_val
                             # multiple rows for a drug could be in cases where multiple targets are indicated.
                             # but the information collected so far in the main row will just be replicated across rows.
                             # So, for each different target listed for a drug, create a separate dict
                             # targets will be a list of dictionaries
                             targets = drug_dict['target']
+
+                            # Sometimes GPT is not consistent it may have an empty list or it may have a None value.
+                            if targets is None or len(targets)==0:
+                                targets = [{}]
                             # Take each dictionary pointing to a target and add it to the main row
                             # Keep adding rows for each drug-target pair
                             for target_dict in targets:
                                 target_row = add_row | target_dict
-                                target_row['pmid'] = pmid_val
                                 final_row = main_row | target_row
                                 main_data.append(final_row)
 
