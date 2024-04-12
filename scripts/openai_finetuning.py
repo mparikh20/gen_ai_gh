@@ -302,3 +302,32 @@ def estimate_finetuning_cost(jsonl_path:str):
 
     print(f'Based on the finetuning cost of ${COST_TRAIN_TOKEN} per token, estimated cost is ${total_cost} for a dataset with {n_examples} examples and {total_tokens} tokens.')
 
+def upload_file(jsonl_path:str,
+                openai_key_path:str):
+    '''
+    '''
+    # Setup client
+    client = openai_api.setup_client(openai_key_path)
+
+    # Load the file and collect the response
+    upload_response = client.files.create(file=open(jsonl_path, "rb"),purpose="fine-tune")
+
+    return upload_response
+
+def finetune_model(openai_key_path:str,
+                   training_file_id:str,
+                   hyperparameters=None,
+                   model_suffix=None,
+                   validation_file_id=None):
+    '''
+    '''
+    # Setup client
+    client = openai_api.setup_client(openai_key_path)
+
+    finetuning_object = client.fine_tuning.jobs.create(model=MODEL,
+                                                       training_file=training_file_id,
+                                                       hyperparameters=hyperparameters,
+                                                       suffix=model_suffix,
+                                                       validation_file=validation_file_id)
+
+    return finetuning_object
