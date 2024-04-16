@@ -142,5 +142,6 @@ def clean_missing_data(df):
     '''
 
     df.replace({np.nan:None,
-                '':None}, inplace=True)
+                '':None,
+                'None':None}, inplace=True)
     return df
