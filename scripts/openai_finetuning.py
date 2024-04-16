@@ -331,3 +331,98 @@ def finetune_model(openai_key_path:str,
                                                        validation_file=validation_file_id)
 
     return finetuning_object
+
+def get_df_from_completions(completions_dict:dict):
+    '''
+    '''
+    # Collect all the df rows as dicts in this main list
+    main_data = []
+
+    # Each completion ID points to a dictionary of dictionaries
+    for key,value in completions_dict.items():
+        main_row = {}
+        main_row['completion_id'] = key
+
+        # Lopp through each dictionary and collect relevant info
+        for key,result in value.items():
+            if 'usage' in key:
+                main_row = main_row | result
+            if 'model' in key:
+                main_row[key] = result
+            if 'data' in key:
+                for data_key,data_val in result.items():
+                    if data_key.startswith('PMID'):
+                        pmid_val = data_key[4:]
+                    else:
+                        pmid_val = data_key
+
+                    main_row['pmid'] = pmid_val
+                    if len(data_val) == 0 or data_val is None:
+                        data_val = [{}]
+                    for drug_dict in data_val:
+                        add_row = main_row | drug_dict
+                        main_data.append(add_row)
+
+    main_df = pd.DataFrame(main_data)
+
+    # Replace empty lists to None
+    main_df = main_df.applymap(lambda x: None if isinstance(x, list) and len(x) == 0 else x)
+
+    # Replace lists containing null string to None
+    main_df = main_df.applymap(lambda x: None if isinstance(x, list) and x[0]=='null' else x)
+
+    main_df.replace({np.nan:None}, inplace=True)
+
+    return main_df
+
+def get_finetuning_results(openai_key_path:str,
+                           finetuning_job_id:str,
+                           ft_results_path:str):
+
+    # Set up API client
+    client = openai_api.setup_client(openai_key_path)
+
+    # Retrieve finetuning job details
+    results_object = client.fine_tuning.jobs.retrieve(finetuning_job_id)
+
+    # Extract relevant details
+    model_id = results_object.fine_tuned_model
+    base_model = results_object.model
+    hyperparameters = str(results_object.hyperparameters)
+    seed = results_object.seed
+    # This will be an array of file ID(s)
+    ft_results_files = results_object.result_files
+
+    # Get file ID
+    ft_results_file_id = ft_results_files[0]
+
+    # Get file contents - everything will be contained in 1 string
+    content = client.files.retrieve_content(ft_results_file_id)
+
+    # Split the string at newlines giving a list of strings
+    content_list = content.split("\n")
+
+    # Remove empty strings
+    for string in content_list:
+        if len(string)==0:
+            content_list.remove(string)
+
+    # Each string represents a row that needs to be further split into a list.
+    # Generate a list of lists, each list being 1 row
+    content_list = [string.split(",") for string in content_list]
+
+    # Add information to each line in the list
+    for count,row in enumerate(content_list):
+        if 'step' in row:
+            row = row + ['model_id','base_model','seed','hyperparameters']
+        else:
+            row = row + [model_id,base_model,seed,hyperparameters]
+
+        content_list[count] = row
+
+    # Collect the column names
+    cols = content_list.pop(0)
+
+    df = pd.DataFrame(content_list,columns=cols)
+
+    df.to_csv(ft_results_path,index=False,encoding='utf-8')
