@@ -10,6 +10,11 @@ It is possible to modify it in the future so that it appends multiple abstract t
 4. All completions coming from all processed abstracts are collected in a single json.
 5. Contents from json are extracted and organized into a df.
 
+Notes about a fine-tuned gpt-3.5-turbo-0125 model:
+model = put the model id of the fine tuned model
+total_tokens = 11800 [context window limit is 16,385 tokens. Output limit is 4096 tokens. So, ~96-97% of 16,385-4096 is a good limit to set in the code.]
+input cost = $3 per million tokens
+output cost = $6 per million tokens
 '''
 # imports
 import json
@@ -194,6 +199,7 @@ def process_pubmed_data(system_path: str,
                         seed:int,
                         temperature:float,
                         model=DEFAULT_MODEL,
+                        tokens_per_message=DEFAULT_TOKENS_PER_MESSAGE,
                         reply_tokens=DEFAULT_REPLY_TOKENS,
                         total_tokens=DEFAULT_TOTAL_TOKENS,
                         cost_per_input_token=DEFAULT_COST_PER_INPUT_TOKEN,
@@ -228,11 +234,13 @@ def process_pubmed_data(system_path: str,
     # Get number of tokens for the base message and get an updated starting value for number of tokens
     system_tokens = get_tokens_per_message(message_dict=system_data,
                                            add_tokens_per_message=True,
-                                           model=model)
+                                           model=model,
+                                           tokens_per_message=tokens_per_message)
 
     user_tokens = get_tokens_per_message(message_dict=user_data,
                                          add_tokens_per_message=True,
-                                         model=model)
+                                         model=model,
+                                         tokens_per_message=tokens_per_message)
 
     # Add all tokens coming from the base message as well as some tokens alloted from the completion.
     calculated_tokens = system_tokens + user_tokens
@@ -284,7 +292,8 @@ def process_pubmed_data(system_path: str,
                 output_id, output = call_api(client=client,
                                              messages=messages,
                                              seed=seed,
-                                             temperature=temperature)
+                                             temperature=temperature,
+                                             model=model)
 
                 # Add the dictionary output with it's API call identifier
                 all_completions[output_id] = output
