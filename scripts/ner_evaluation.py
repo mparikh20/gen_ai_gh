@@ -146,10 +146,6 @@ def get_target_metrics(model_df,
 
         gtruth_targets = gtruth_df[(gtruth_df['pmid']==matched_drug['pmid']) & (gtruth_df['drug_name']==matched_drug['gtruth_drug_name'])]['direct_target'].unique().tolist()
 
-        # Clean up the target strings by removing characters
-        # cleaned_model_targets = [x.translate(str.maketrans('', '', string.punctuation)) if x is not None else str(x) for x in model_targets]
-        # cleaned_gt_targets = [x.translate(str.maketrans('', '', string.punctuation)) if x is not None else str(x) for x in gt_targets]
-
         # Compare the targets using token_sort_ratio. For target names, a stricter cutoff is used.
         for model_target in model_targets:
 
@@ -202,39 +198,88 @@ def get_target_metrics(model_df,
 
     return target_metrics, targets_pmids_errors, target_matches
 
-# def get_interaction_metrics(model_df,
-#                             gtruth_df,
-#                             target_matches:list,
-#                             score_cutoff:int):
-#     '''
-#     Description:
-#     Args:
-#         model_df = df containing results from the GPT completions
-#         gtruth_df = df containing manually curated ground truth data
-#         target_matches = a list of dictionaries showing which drug and target pairs from ground truth data and the model matched for each PMID
-#                          output of get_drug_metrics function
-#         score_cutoff = int,a score greater than or equal to this cutoff will mean two strings are a match using the defined scorer
-#                        highest = 100
-#     Returns:
-#     '''
-#     # Dictionary to ID where the errors are; list will have PMIDs
-#     int_pmids_errors = {'fp':[],'fn':[]}
-#     int_metrics = {'fp':0,'fn':0}
+def get_interaction_metrics(model_df,
+                            gtruth_df,
+                            target_matches:list,
+                            score_cutoff:int):
+    '''
+    Description:
+    Args:
+        model_df = df containing results from the GPT completions
+        gtruth_df = df containing manually curated ground truth data
+        target_matches = a list of dictionaries showing which drug and target pairs from ground truth data and the model matched for each PMID
+                         output of get_drug_metrics function
+        score_cutoff = int,a score greater than or equal to this cutoff will mean two strings are a match using the defined scorer
+                       highest = 100
+    Returns:
+    '''
+    # Dictionary to ID where the errors are; list will have PMIDs
+    int_pmids_errors = {'fp':[],'fn':[]}
+    int_metrics = {'fp':0,'fn':0}
 
-#     # Collect matches - pmid,drug,target, and interaction
-#     int_matches = []
-#     # Iterate over matched drugs and compare associated targets
-#     for matched_pair in target_matches:
-#         # Get interaction value
-#         model_int = model_df[(model_df['pmid']==matched_pair['pmid']) & (model_df['drug_name']==matched_pair['model_drug_name'])]['direct_target'].unique().tolist()
+    # Collect matches - pmid,drug,target, and interaction
+    int_matches = []
+    # Iterate over matched drugs and compare associated targets
+    for matched_pair in target_matches:
+        # Get interaction value
+        model_ints = model_df[(model_df['pmid']==matched_pair['pmid']) &
+        (model_df['drug_name']==matched_pair['model_drug_name']) &
+        (model_df['direct_target']==matched_pair['model_direct_target'])]['drug-direct_target_interaction'].unique().tolist()
 
-#         gtruth_int = gtruth_df[(gtruth_df['pmid']==matched_drug['pmid']) & (gtruth_df['drug_name']==matched_drug['model_drug_name'])]['direct_target'].unique().tolist()
+        gtruth_ints = gtruth_df[(gtruth_df['pmid']==matched_pair['pmid']) &
+        (gtruth_df['drug_name']==matched_pair['gtruth_drug_name']) &
+        (gtruth_df['direct_target']==matched_pair['gtruth_direct_target'])]['drug-direct_target_interaction'].unique().tolist()
 
+        # Compare the interaction using token_set_ratio.
+        for model_int in model_ints:
 
+            for gtruth_int in gtruth_ints:
+                # Get fuzzy matching score after removing special characters as these will affect the score
+                # None values will throw an error, so variables are first converted to a string
+                cleaned_model_int = str(model_int).translate(str.maketrans('', '', string.punctuation))
+                cleaned_gtruth_int = str(gtruth_int).translate(str.maketrans('', '', string.punctuation))
 
+                # Get a score
+                score = fuzz.token_set_ratio(cleaned_model_int,cleaned_gtruth_int)
 
+                # If there is match, collect it as a dictionary
+                if score >= score_cutoff:
+                    matched_pair['model_drug-direct_target_interaction'] = model_int
+                    matched_pair['gtruth_drug-direct_target_interaction'] = gtruth_int
 
+                    # Collect the match
+                    int_matches.append(matched_pair)
 
+                    # Remove the matched target and stop looking for a match
+                    gtruth_ints.remove(gtruth_int)
+                    model_ints.remove(model_int)
+                    break
+
+        # If a model interaction has not been matched to anything in ground truth, it will be a false positive
+        int_metrics['fp'] += len(model_ints)
+        # Add the PMID to trace errors
+        if len(model_ints) > 0:
+            int_pmids_errors['fp'].append(matched_pair['pmid'])
+
+        # Whatever ground truth interaction is left was missed by the model and hence is false negative
+        int_metrics['fn'] += len(gtruth_ints)
+        if len(gtruth_ints) > 0:
+            int_pmids_errors['fn'].append(matched_pair['pmid'])
+
+    # Get true positive and true negative numbers
+    int_matches_df = pd.DataFrame(int_matches)
+
+    # Number of rows with None will be all true negative drug-target pairs
+    tn = len(int_matches_df[int_matches_df['model_drug-direct_target_interaction'].isna() & int_matches_df['gtruth_drug-direct_target_interaction'].isna()])
+
+    # Remaining rows will be true positive drug-target pairs
+    tp = len(int_matches_df[~(int_matches_df['model_drug-direct_target_interaction'].isna() & int_matches_df['gtruth_drug-direct_target_interaction'].isna())])
+
+    # Add these numbers
+    int_metrics['tp'] = tp
+    int_metrics['tn'] = tn
+
+    return int_metrics, int_pmids_errors, int_matches
 
 def calculate_metrics(metrics:dict):
     '''
