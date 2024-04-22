@@ -221,14 +221,20 @@ def get_interaction_metrics(model_df,
     int_matches = []
     # Iterate over matched drugs and compare associated targets
     for matched_pair in target_matches:
-        # Get interaction value
-        model_ints = model_df[(model_df['pmid']==matched_pair['pmid']) &
-        (model_df['drug_name']==matched_pair['model_drug_name']) &
-        (model_df['direct_target']==matched_pair['model_direct_target'])]['drug-direct_target_interaction'].unique().tolist()
+        df = pd.DataFrame([matched_pair])
 
-        gtruth_ints = gtruth_df[(gtruth_df['pmid']==matched_pair['pmid']) &
-        (gtruth_df['drug_name']==matched_pair['gtruth_drug_name']) &
-        (gtruth_df['direct_target']==matched_pair['gtruth_direct_target'])]['drug-direct_target_interaction'].unique().tolist()
+        # Extract matching rows and then get interaction type value
+        model_ints = pd.merge(df[['pmid','model_drug_name','model_direct_target']],
+                              model_df,
+                              how='inner',
+                              left_on=['pmid','model_drug_name','model_direct_target'],
+                              right_on=['pmid','drug_name','direct_target'])['drug-direct_target_interaction'].unique().tolist()
+
+        gtruth_ints = pd.merge(df[['pmid','gtruth_drug_name','gtruth_direct_target']],
+                              gtruth_df,
+                              how='inner',
+                              left_on=['pmid','gtruth_drug_name','gtruth_direct_target'],
+                              right_on=['pmid','drug_name','direct_target'])['drug-direct_target_interaction'].unique().tolist()
 
         # Compare the interaction using token_set_ratio.
         for model_int in model_ints:
@@ -238,7 +244,6 @@ def get_interaction_metrics(model_df,
                 # None values will throw an error, so variables are first converted to a string
                 cleaned_model_int = str(model_int).translate(str.maketrans('', '', string.punctuation))
                 cleaned_gtruth_int = str(gtruth_int).translate(str.maketrans('', '', string.punctuation))
-
                 # Get a score
                 score = fuzz.token_set_ratio(cleaned_model_int,cleaned_gtruth_int)
 
