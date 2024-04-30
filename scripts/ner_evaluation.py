@@ -1,17 +1,24 @@
 '''
-Overview
+Overview - Module to compare entities (drugs, targets, and their interactions) extracted from PubMed abstracts by GPT,
+with manually curated ground truth data.
+Functions to get confusion matrix numbers and metrics (precison, recall, etc.) for each entity type.
 '''
 
 # imports
-import numpy as np
-import pandas as pd
 import string
+import pandas as pd
 from fuzzywuzzy import fuzz
 
 def get_pmids_without_entity(df,
                              entity_column_name:str):
-
-
+    '''
+    Description: Takes a df and returns indices where a pubmed id has no entity of interest (eg. drug_name)
+                 eg. to get PMIDs that have no drug names
+    Args:
+        df
+        entity_column_name = column of interest
+    Returns: an array of pmids
+    '''
     pmids = df.groupby('pmid')[entity_column_name].nunique()[lambda x: x==0].index
 
     return pmids
@@ -21,12 +28,13 @@ def get_drug_metrics(model_df,
                      column_name:str,
                      score_cutoff:int):
     '''
-    Description:
+    Description: Gets confusion matrix numbers comparing drug names extracted using GPT with manually curated data.
     Args:
         model_df = df containing results from the GPT completions
         gtruth_df = df containing manually curated ground truth data
-        scorer = the type of fuzzy match scorer to use. eg. token_set_ratio or token_sort_ratio
+        column_name = name of the column containing drug names associated with each PMID
         score_cutoff = int,a score greater than or equal to this cutoff will mean two strings are a match using the defined scorer
+                       (token_set_ratio)
                        highest = 100
     Returns:
         metrics = dictionary with all the confusion matrix values for: tp,tn,fp,fn
@@ -40,7 +48,7 @@ def get_drug_metrics(model_df,
     pmids_errors = {'fp':[],'fn':[]}
 
     # Get all PMIDs
-    all_pmids = set(model_df['pmid'].unique())
+    all_pmids = set(gtruth_df['pmid'].unique())
 
     # get ground truth papers that have no drugs in it
     gtruth_no_drugs = get_pmids_without_entity(gtruth_df,entity_column_name=column_name)
@@ -77,8 +85,8 @@ def get_drug_metrics(model_df,
             for gtruth_drug in gtruth_drugs:
 
                 # Get fuzzy matching score after removing special characters as these will affect the score
-                cleaned_model_drug = model_drug.translate(str.maketrans('', '', string.punctuation))
-                cleaned_gtruth_drug = gtruth_drug.translate(str.maketrans('', '', string.punctuation))
+                cleaned_model_drug = str(model_drug).translate(str.maketrans('', '', string.punctuation))
+                cleaned_gtruth_drug = str(gtruth_drug).translate(str.maketrans('', '', string.punctuation))
 
                 score = fuzz.token_set_ratio(cleaned_model_drug,cleaned_gtruth_drug)
 
@@ -121,7 +129,9 @@ def get_target_metrics(model_df,
                        matches:list,
                        score_cutoff:int):
     '''
-    Description:
+    Description: Gets confusion matrix numbers comparing target names extracted using GPT with manually curated data.
+                 Targets are compared for each drug and not independently.
+                 Only drugs that matched between the RAG-GPT approach and manual data are considered for evaluation to get target metrics.
     Args:
         model_df = df containing results from the GPT completions
         gtruth_df = df containing manually curated ground truth data
@@ -129,8 +139,11 @@ def get_target_metrics(model_df,
                   output of get_drug_metrics function
         score_cutoff = int,a score greater than or equal to this cutoff will mean two strings are a match using the defined scorer
                        highest = 100
-
+                       Here, a stricter scorer, token_sort_ratio is used
     Returns:
+        metrics = dictionary with all the confusion matrix values for: tp,tn,fp,fn
+        pmids_errors = a dictionary showing which PMIDs contain false positive or false negative errors
+        matches = a list of dictionaries showing which target from the ground truth data and the model matched for each drug within a PMID
     '''
     # Dictionary to ID where the errors are; list will have PMIDs
     targets_pmids_errors = {'fp':[],'fn':[]}
@@ -172,16 +185,27 @@ def get_target_metrics(model_df,
                     model_targets.remove(model_target)
                     break
 
-        # If a model target has not been matched to anything in ground truth, it will be a false positive
-        target_metrics['fp'] += len(model_targets)
-        # Add the PMID to trace errors
-        if len(model_targets) > 0:
+        # First handle cases where either model or ground truth target is None
+        # If model target is None and gt not None, then it's a fn.
+        if model_targets == [None] and gtruth_targets != [None]:
+            target_metrics['fn'] += len(gtruth_targets)
+            targets_pmids_errors['fn'].append(matched_drug['pmid'])
+
+        # If model target is not None but gt is None, it's a fp
+        elif model_targets != [None] and gtruth_targets == [None]:
+            target_metrics['fp'] += len(model_targets)
             targets_pmids_errors['fp'].append(matched_drug['pmid'])
 
-        # Whatever ground truth targets are left were missed by the model and hence are false negatives
-        target_metrics['fn'] += len(gtruth_targets)
-        if len(gtruth_targets) > 0:
-            targets_pmids_errors['fn'].append(matched_drug['pmid'])
+        else:
+            # If a model target has not been matched to anything in ground truth, it will be a false positive
+            if len(model_targets) > 0:
+                target_metrics['fp'] += len(model_targets)
+                targets_pmids_errors['fp'].append(matched_drug['pmid'])
+
+            # Whatever ground truth targets are left were missed by the model and hence are false negatives
+            if len(gtruth_targets) > 0:
+                target_metrics['fn'] += len(gtruth_targets)
+                targets_pmids_errors['fn'].append(matched_drug['pmid'])
 
     # Get true positive and true negative numbers
     target_matches_df = pd.DataFrame(target_matches)
@@ -203,15 +227,20 @@ def get_interaction_metrics(model_df,
                             target_matches:list,
                             score_cutoff:int):
     '''
-    Description:
+    Description: Gets confusion matrix numbers comparing drug-target interaction type extracted using GPT, with manually curated data.
+                 Interaction values are compared for each drug-target pair and not independently.
+                 Only drug-target pairs that matched between the RAG-GPT approach and manual data are considered for evaluation to get interaction metrics.
     Args:
         model_df = df containing results from the GPT completions
         gtruth_df = df containing manually curated ground truth data
         target_matches = a list of dictionaries showing which drug and target pairs from ground truth data and the model matched for each PMID
-                         output of get_drug_metrics function
+                         output of get_target_metrics function
         score_cutoff = int,a score greater than or equal to this cutoff will mean two strings are a match using the defined scorer
                        highest = 100
     Returns:
+        int_metrics = dictionary with all the confusion matrix values for: tp,tn,fp,fn
+        int_pmids_errors = a dictionary showing which PMIDs contain false positive or false negative errors
+        int_matches = a list of dictionaries showing interaction values from the ground truth data and the model matched for each drug-target pair within a PMID
     '''
     # Dictionary to ID where the errors are; list will have PMIDs
     int_pmids_errors = {'fp':[],'fn':[]}
@@ -260,16 +289,27 @@ def get_interaction_metrics(model_df,
                     model_ints.remove(model_int)
                     break
 
-        # If a model interaction has not been matched to anything in ground truth, it will be a false positive
-        int_metrics['fp'] += len(model_ints)
-        # Add the PMID to trace errors
-        if len(model_ints) > 0:
+        # First handle cases where either model or ground truth target is None
+        # If model interaction is None and gt not None, then it's a fn.
+        if model_ints == [None] and gtruth_ints != [None]:
+            int_metrics['fn'] += len(gtruth_ints)
+            int_pmids_errors['fn'].append(matched_pair['pmid'])
+
+        # If model interaction is not None but ground truth interaction is None, it's a fp
+        elif model_ints != [None] and gtruth_ints == [None]:
+            int_metrics['fp'] += len(model_ints)
             int_pmids_errors['fp'].append(matched_pair['pmid'])
 
-        # Whatever ground truth interaction is left was missed by the model and hence is false negative
-        int_metrics['fn'] += len(gtruth_ints)
-        if len(gtruth_ints) > 0:
-            int_pmids_errors['fn'].append(matched_pair['pmid'])
+        else:
+            # If a model interaction has not been matched to anything in ground truth, it will be a false positive
+            if len(model_ints) > 0:
+                int_metrics['fp'] += len(model_ints)
+                int_pmids_errors['fp'].append(matched_pair['pmid'])
+
+            # Whatever ground truth interactions are left were missed by the model and hence are false negatives
+            if len(gtruth_ints) > 0:
+                int_metrics['fn'] += len(gtruth_ints)
+                int_pmids_errors['fn'].append(matched_pair['pmid'])
 
     # Get true positive and true negative numbers
     int_matches_df = pd.DataFrame(int_matches)
@@ -288,10 +328,11 @@ def get_interaction_metrics(model_df,
 
 def calculate_metrics(metrics:dict):
     '''
-    Description:
+    Description: Calculates metrics from confusion matrix numbers.
     Args:
         metrics = dictionary with all the confusion matrix values for: tp,tn,fp,fn
     Returns:
+        eval_metrics = a dictionary showing precision, recall, F1 score, accuracy, and negative predictive value
     '''
     eval_metrics = {}
     accuracy = (metrics['tp']+metrics['tn']) / (metrics['tp'] + metrics['tn'] + metrics['fp'] + metrics['fn'])
