@@ -1,0 +1,1 @@
+{"role": "user", "content": "For the text under TASK, starting with an identifier, identify any drugs, their targets, drug-target relationship, and ClinicalTrials.gov identifier or number. Produce a JSON output.\nTASK"}
