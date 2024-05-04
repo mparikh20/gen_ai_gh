@@ -1,0 +1,7 @@
+# Specify filepatterns you want git to ignore.
+.env
+.env*
+*checkpoint.ipynb
+*.gsheet
+*.gdoc
+.DS_Store
