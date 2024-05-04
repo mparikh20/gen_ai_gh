@@ -18,7 +18,7 @@ Although there are certain publicly available datasets containing drug-centric i
 
 With LLMs, it is possible to design and implement in-house pipelines using Retrieval Augmented Generation (RAG) approach enabling automated extraction of information and continued access to an updated knowledgebase.
 
-### Approach / TL;DR
+### Approach
 
 Published biomedical articles involving drug(s) within specific cancers of interest were obtained from PubMed. A total of 87 articles (30 breast cancer, 30 glioblastoma, and 27 lung cancer) were obtained using NCBI's E-utilities API. Feasibility was confirmed by using GPT-4 to extract drug-centric information from only abstract text from 30 articles. Second step involved fine-tuning GPT-3.5 on 57 training examples, and using the fine-tuned model for inference on the 30 abstracts (test set). Performance of each step was measured by comparing the model outputs with a manually curated ground truth dataset.
 
