@@ -1,14 +1,14 @@
-# About this module
 '''
-Overall use:
+This module conducts a search for the specified query on PubMed using the eutils API and returns a df containing information about specified number of papers.
 
-1. function that gets pmids - (caveat-limitation is only 10K for PubMed. E-direct command line utility can do >10K)
-2. function that takes in pmids and returns XML with abstracts
-3. function that extracts data from XML and saves it in a df, saves it.
+The run_pubmed_pipeline runs the following steps:
 
-Deep dive into how the code was developed:
+    get_pmids function: gets resulting pmids for a query - (caveat-limitation is only 10K for PubMed. E-direct command line utility can do >10K)
+    query_and_ids: collects some search metadata and PMIDs
+    get_abstracts: function that takes in pmids and returns XML with abstracts
+    get_data_from_xml: function that extracts data from XML and saves it in a df
 
-Note about API key:
+Notes:
 Currently the code is written without pulling any API key.
 Without a key, 3 requests per second are allowed.
 With an API key, 10 requests per second are allowed by default.
@@ -22,11 +22,10 @@ import pandas as pd
 import requests
 import xml.etree.ElementTree as ET
 
-
 # Specify global variables
-base_url = 'https://eutils.ncbi.nlm.nih.gov/entrez/eutils/'
-database = 'pubmed'
-today_date = datetime.today().date()
+BASE_URL = 'https://eutils.ncbi.nlm.nih.gov/entrez/eutils/'
+DATABASE = 'pubmed'
+TODAY_DATE = datetime.today().date()
 
 def get_pmids(query: str,
               save_on_server: str,
@@ -62,7 +61,7 @@ def get_pmids(query: str,
 
     # Search query
     # the usehistory=y will save the results on a server, to be used immediately to get abstracts using the efetch utility
-    search_suffix = (f'esearch.fcgi?db={database}'
+    search_suffix = (f'esearch.fcgi?db={DATABASE}'
                      f'&term={query}'
                      f'&usehistory={save_on_server}'
                      f'&retmode={search_format}'
@@ -71,7 +70,7 @@ def get_pmids(query: str,
                      f'&sort={sorting_criteria}')
 
     # Construct url
-    search_url = base_url + search_suffix
+    search_url = BASE_URL + search_suffix
 
     # Make the API call
     response = requests.get(search_url)
@@ -115,7 +114,7 @@ def query_and_ids(search_output):
     metadata_dict = {'query_string': search_output['esearchresult']['querytranslation'],
                      'num_total_matches': int(search_output['esearchresult']['count']),
                      'all_matching_pmids':id_str,
-                     'acquisition_date': today_date}
+                     'acquisition_date': TODAY_DATE}
 
     print('\tMetadata obtained and saved in a dictionary.')
 
@@ -151,13 +150,13 @@ def get_abstracts(search_output,
         query_key=search_output['esearchresult']['querykey']
         web_env = search_output['esearchresult']['webenv']
 
-        fetchurl_suffix = f'efetch.fcgi?db={database}&query_key={query_key}&WebEnv={web_env}&rettype={content_type}&retstart={fetch_starting_index}&retmax={fetch_max_records}&retmode=xml'
+        fetchurl_suffix = f'efetch.fcgi?db={DATABASE}&query_key={query_key}&WebEnv={web_env}&rettype={content_type}&retstart={fetch_starting_index}&retmax={fetch_max_records}&retmode=xml'
 
         # Get list of all ids for which data should be collected:
-        ids_suffix = f'efetch.fcgi?db={database}&query_key={query_key}&WebEnv={web_env}&rettype=uilist&retmode=text&retstart={fetch_starting_index}&retmax={fetch_max_records}'
+        ids_suffix = f'efetch.fcgi?db={DATABASE}&query_key={query_key}&WebEnv={web_env}&rettype=uilist&retmode=text&retstart={fetch_starting_index}&retmax={fetch_max_records}'
 
         # API call for getting just the PMIDs
-        ids_url = base_url + ids_suffix
+        ids_url = BASE_URL + ids_suffix
         ids_response = requests.get(ids_url)
 
         # This will be a string of ids.
@@ -174,10 +173,10 @@ def get_abstracts(search_output,
 
         # Convert it to a string of ids to pass it to the url
         ids_str = ",".join(ids_of_interest)
-        fetchurl_suffix = f'efetch.fcgi?db={database}&id={ids_str}&rettype={content_type}&retmode=xml'
+        fetchurl_suffix = f'efetch.fcgi?db={DATABASE}&id={ids_str}&rettype={content_type}&retmode=xml'
 
     # Make the API call
-    fetch_url = base_url + fetchurl_suffix
+    fetch_url = BASE_URL + fetchurl_suffix
 
     fetch_response = requests.get(fetch_url)
 
@@ -314,6 +313,11 @@ def run_pubmed_pipeline(query,
                         content_type,
                         fetch_starting_index,
                         fetch_max_records):
+    '''
+    Description: A wrapper function that takes a query and runs a pipeline to get specified number of matching PubMed abstracts and metadata into a df.
+    Args: all arguments are defined above within each function
+    Returns: a df with the results from querying on PubMed - PMID, abstract text, and some other metadata
+    '''
 
     print(f'----Running pipeline for the following query:----\n{query}')
 

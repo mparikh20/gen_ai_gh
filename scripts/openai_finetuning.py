@@ -1,24 +1,22 @@
 '''
 Overview
-
-
+Contains functions specific to the finetuning workflow such as:
+splitting data into training and test data,
+preparation of training and validation data files for finetuning
+finetuning the model
+and other accessory functions for restructuring and organizing data and types between different file formats involved in the workflow
 '''
 
 # imports
 import json
-import os
 from collections import defaultdict
-from datetime import datetime
-from dotenv import load_dotenv
-from openai import OpenAI
 import numpy as np
 import openai_api
 import pandas as pd
 import tiktoken
-import utils
 
 # specify global variables
-# this is the recommended model for fine-tuning
+# this is the recommended model for fine-tuning and these details were taken from the OpenAI website
 MODEL = 'gpt-3.5-turbo-0125'
 TOKENS_PER_MESSAGE = 3
 TOKEN_LIMIT = 16385
@@ -29,8 +27,14 @@ MAX_DEFAULT_EPOCHS = 25
 MIN_TARGET_EXAMPLES = 100
 MAX_TARGET_EXAMPLES = 25000
 
-
-def load_json(json_path):
+def load_json(json_path:str):
+    '''
+    Description: Takes a json file path and loads it.
+    Args:
+        json_path = str or Path object
+    Returns:
+        Python object from a json-encoded string/file.
+    '''
 
     with open(json_path,"r") as json_file:
         data = json.load(json_file)
@@ -38,8 +42,14 @@ def load_json(json_path):
         return data
 
 def get_test_set_ids(test_df,
-                     id_column):
+                     id_column:str)->list:
     '''
+    Description: Takes a df consising of only test set data points and collects the associated IDs. (PubMed IDs)
+    Args:
+        test_df = df
+        id_column = str, name of the column that holds the identifiers. eg. 'pmid'
+    Returns:
+        a list of identifiers for test set data points
     '''
     test_df.drop_duplicates(inplace=True)
 
@@ -47,8 +57,13 @@ def get_test_set_ids(test_df,
 
     return test_ids
 
-def rows_to_dict(df):
+def rows_to_dict(df)->list:
     '''
+    Description: Takes a df and restructures it for preparing training data
+    Args:
+        df = df containing training examples or test examples (must have outputs but not actual abstracts)
+    Returns:
+        data_list = df rows restructured as a list of training/test outputs
     '''
     # Get a list of dictionaries, with each dictionary being a row
     df_dict = df.to_dict(orient='records')
@@ -57,6 +72,8 @@ def rows_to_dict(df):
     data_list = []
 
     data_dict = {}
+
+    # this will restructure content as {pmid1:[{row1},{row2}],'pmid2':[{row1},{row2}]}
     for data in df_dict:
         pmid = data.pop('pmid')
 
@@ -65,6 +82,7 @@ def rows_to_dict(df):
         else:
             data_dict[pmid].append(data)
 
+    # Data will be restructured as [{pmid1: [{row1},{row2}]},{pmid2: [{row1}]},{pmid3: [{row1}]}]
     for key,val in data_dict.items():
         data_list.append({key:val})
 
@@ -75,7 +93,17 @@ def create_one_example(system_data:dict,
                        output_dict:dict,
                        pubmed_df):
     '''
-
+    Description: Takes base prompt language, abstract, and the corresponding output for a single pmid.
+                 Packages everything and returns a single training example (or validation example)
+    Args:
+        system_data = dictionary with the typical 'role' and 'content' keys or according to the openai format
+                      role: system and content points to the system message
+        user_data = dictionary with the typical 'role' and 'content' keys or according to the openai format
+                    role: user and content points to the base user message
+        output_dict = a dictionary with the output for a single pmid
+        pubmed_df = df containing pmid and abstracts
+    Returns:
+        example = a dictionary containing a single training (or validation) example
     '''
     # From the output dictionary, get the PMID and get the matching abstract
     pmid = next(iter(output_dict.keys()))
@@ -106,9 +134,21 @@ def prepare_train_val_data(main_df,
                            system_path:str,
                            user_path:str,
                            pubmed_df,
-                           training_path,
-                           test_path):
+                           training_path:str,
+                           test_path:str):
     '''
+    Description: Creates training and test (also used as validation) jsonl files
+    Args:
+        main_df = df containing pmid and the associated extracted outputs (drug_name, direct_target,drug-direct_target_interaction,clinical_trials_id)
+                  from manually curated data
+        test_ids = list of pmids that constitute the test set (same as the validation set used for loss calculation during finetuning)
+        system_path = str, path to the json file containing the system message
+        user_path = str, path to the json file containing the user message
+        pubmed_df = df containing pmid and abstracts
+        training_path = str, path to the jsonl file containing all training examples
+        test_path = str, path to the jsonl file containing all test (here validation) examples
+    Returns:
+        None; creates and saves jsonl files
     '''
     # Remove test set rows
     training_df = main_df[~main_df['pmid'].isin(test_ids)].copy()
@@ -162,7 +202,12 @@ def prepare_train_val_data(main_df,
 
 def check_data_formatting(jsonl_path):
     '''
-    Copied from openAI's website - their code checks if the jsonl files are formatted properly for the model.
+    Description: Checks if the training or validation jsonl files are formatted properly for the model.
+                 Code copied from openAI's website
+    Args:
+        jsonl path = path to the jsonl file containing training or validation data
+    Returns:
+        None. Prints number of examples, prints the first example, and any error flags if formatting is wrong
     '''
     # Load the dataset
     with open(jsonl_path, 'r', encoding='utf-8') as f:
@@ -212,6 +257,7 @@ def check_data_formatting(jsonl_path):
             print(f"{k}: {v}")
     else:
         print("No errors found")
+
 def get_tokens_per_text(text:str,
                         model=MODEL):
     '''
@@ -254,6 +300,9 @@ def get_tokens_per_message(message_dict:dict,
 
 def estimate_finetuning_cost(jsonl_path:str):
     '''
+    Description: Calculates number of tokens, training examples, recommends epochs, and calculates finetuning cost.
+    Args:
+        jsonl_path = path to the training data jsonl file
     '''
     # Load the jsonl file into a list of messages dictionaries, each one pointing to 1 example
     with open(jsonl_path, 'r', encoding='utf-8') as f:
@@ -305,6 +354,11 @@ def estimate_finetuning_cost(jsonl_path:str):
 def upload_file(jsonl_path:str,
                 openai_key_path:str):
     '''
+    Description: Uploads training or validation jsonl file to the API and gets a response object, which contains details such as the file id.
+    Args:
+        jsonl_path = path to the training or validation jsonl file
+        openai_key_path = path to the API key
+    Returns: response object
     '''
     # Setup client
     client = openai_api.setup_client(openai_key_path)
@@ -320,6 +374,16 @@ def finetune_model(openai_key_path:str,
                    model_suffix=None,
                    validation_file_id=None):
     '''
+    Description: Finetunes a model
+    Args:
+        openai_key_path = path to the API key
+        training_file_id = file ID for the training file uploaded through the API
+                           obtained from the upload_file response object
+        hyperparameters = dictionary specifying any hyperparameters such as n_epochs
+        model_suffix = a custom suffix can be added to the finetuned model identifier generated by the API
+        validation_file_id = file ID for the training file uploaded through the API
+                             obtained from the upload_file response object
+    Returns: a finetuning object
     '''
     # Setup client
     client = openai_api.setup_client(openai_key_path)
@@ -334,6 +398,11 @@ def finetune_model(openai_key_path:str,
 
 def get_df_from_completions(completions_dict:dict):
     '''
+    Description: Takes a dictionary containing all completions, extracts information from all the relevant, nested contents into a df.
+    Args:
+        completions_dict = dict with information extracted from the completions endpoint json, obtained from inference
+                           (output of process_pubmed_data obtained from the open_ai module which takes care of calling a model for inference)
+    Returns: df with the chat completion ids, pmid, extracted named entities per the tasks specified in the API calls, and breakdown of the usage tokens.
     '''
     # Collect all the df rows as dicts in this main list
     main_data = []
@@ -378,7 +447,16 @@ def get_df_from_completions(completions_dict:dict):
 def get_finetuning_results(openai_key_path:str,
                            finetuning_job_id:str,
                            ft_results_path:str):
-
+    '''
+    Description: Takes the finetuning job id, retrieves model details, seed, hyperparameters used, loss metrics collected by the API,
+                 organizes everything into a df.
+    Args:
+        openai_key_path = path to the API key
+        finetuning_job_id = str, an ID assigned by the API at the time of finetuning
+                            this is obtained from the finetuning object returned from finetune_model function or directly from the online UI
+        ft_results_path = str, path where the loss metrics, token accuracy, etc. collected into a df should be saved as a CSV
+    Returns:
+    '''
     # Set up API client
     client = openai_api.setup_client(openai_key_path)
 

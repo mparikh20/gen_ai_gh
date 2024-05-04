@@ -1,4 +1,3 @@
-
 '''
 Overview
 This module has functions that can be used with Google APIs or other data sources.

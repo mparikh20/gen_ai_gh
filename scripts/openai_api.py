@@ -100,7 +100,7 @@ def get_tokens_per_message(message_dict:dict,
     '''
     Description: Calculates tokens for all values within a message (contained within a dicitonary.)
     Args:
-        message_dict = dictionary with the typical 'role' and 'system' keys or according to the openai format.
+        message_dict = dictionary with the typical 'role' and 'content' keys or according to the openai format.
         add_tokens_per_message = boolean indicating whether to add priming tokens or not.
                                  This value is already set as a global variable above.
     Returns: number of tokens for an entire message dictionary
@@ -207,8 +207,8 @@ def process_pubmed_data(system_path: str,
     '''
     Description: Takes a df containing pubmed data and makes an API call for completing specified tasks for each PMID.
     Args:
-        system_data = str, path to the json file containing the system message
-        user_path = str, path to the json file containing the system message
+        system_path = str, path to the json file containing the system message
+        user_path = str, path to the json file containing the user message
         data_df1 = df containing pmid and abstracts
         openai_key_path = path to the API key
         seed = a seed to make sure the same output type is generated upon re-running the same prompt (this is not always guaranteed)
@@ -314,7 +314,7 @@ def get_df_from_completions(all_completions:dict):
     '''
     Description: Takes a dictionary containing all completions, extracts information from all the relevant, nested contents into a df.
     Args:
-        all_completions = dict,
+        all_completions = dict, output of process_pubmed_data
     Returns: df with the chat completion ids, pmid, extracted named entities per the tasks specified in the API calls, and breakdown of the usage tokens.
     '''
     # Collect all the df rows as dicts in this main list
