@@ -1,0 +1,40 @@
+completion_id,completion_tokens,prompt_tokens,total_tokens,drug_name,tested_or_effective_group,drug_tested_in_diseases,clinical_trials_id,direct_target,drug-direct_target_interaction,pmid
+chatcmpl-95Fz5ygwhHbh6fS34y9rl6UCQzw7V,61.0,1073.0,1134.0,S62,,['breast cancer'],,PELI1/EGFR,disruptor,36841821
+chatcmpl-95FzB5d0oHjWiZz8uYJofalUBnFuB,99.0,1131.0,1230.0,regorafenib,,['GBM'],,autophagosome-lysosome fusion,inhibitor,36399643
+chatcmpl-95FzLUxdFBE1KNul7adDXyaq1Ds0Q,70.0,1086.0,1156.0,fatostatin,,"['glioblastoma', 'GBM']",,AKT/mTORC1/GPX4 signaling pathway,inhibitor,36966152
+chatcmpl-95FzTMkaW3MDTzy0nvTisQfDIP9bc,78.0,1171.0,1249.0,MAM,"['cisplatin-resistant A549', 'AZD9291-resistant H1975']","['non-small cell lung cancer', 'NSCLC']",,NQO1,activator,37321064
+chatcmpl-95FzZlGTV1CFR13ye9QStxhproc0a,130.0,1111.0,1241.0,ganciclovir,['HCMV-induced glioblastoma'],['glioblastoma'],,EZH2,inhibitor,37147437
+chatcmpl-95FzZlGTV1CFR13ye9QStxhproc0a,130.0,1111.0,1241.0,temozolomide,['HCMV-induced glioblastoma'],['glioblastoma'],,EZH2,inhibitor,37147437
+chatcmpl-95FzgJuIqe3QuFuMCt1IUiVhDhIJH,61.0,1132.0,1193.0,Eltrombopag,,['glioblastoma'],,TFEB,inhibitor,37036151
+chatcmpl-95FzoMsZUJKmuGWz7UYmqDciEEa9Q,70.0,1023.0,1093.0,,['CD39+ CD8+ T cells'],"['lung cancer', 'non-small cell lung cancer']",,,,36574773
+chatcmpl-95FztNAJ0pDM48JNlWHmcYOJXcJkd,163.0,1129.0,1292.0,TAK-228,"['NFE2L2-mutated LUSC', 'KEAP1-mutated LUSC', 'KRAS/NFE2L2- or KEAP1-mutated NSCLC']","['NSCLC', 'LUSC']",,TORC1/2,inhibitor,36240971
+chatcmpl-95FztNAJ0pDM48JNlWHmcYOJXcJkd,163.0,1129.0,1292.0,CB-839,['NRF2-activated LUSC'],"['NSCLC', 'LUSC']",,,,36240971
+chatcmpl-95G03gAtffws6dX8mXLVIpz0ShXLu,58.0,1070.0,1128.0,sertaconazole,['lung cancer xenograft models'],['lung cancer'],,,,37507782
+chatcmpl-95G07a3mXMETVghoQMYcOXzRWYkgC,68.0,1036.0,1104.0,F3-targeting agent,['SA-βGal+ GBM cells'],['glioblastoma'],,F3,inhibitor,37451272
+chatcmpl-95G0Bip0DcekzQFObIQXunilNWIEf,162.0,1099.0,1261.0,Aloe-emodin,['GBM'],['glioblastoma'],,,,37066699
+chatcmpl-95G0Bip0DcekzQFObIQXunilNWIEf,162.0,1099.0,1261.0,AE@ZIF-8 NPs,['GBM'],['glioblastoma'],,,,37066699
+chatcmpl-95G0Bip0DcekzQFObIQXunilNWIEf,162.0,1099.0,1261.0,AE-NPs,['GBM'],['glioblastoma'],,,,37066699
+chatcmpl-95G0LI0FcejHjqSMrzJHWnY1jLwxQ,89.0,1327.0,1416.0,depatuxizumab mafodotin,"['EGFR-amp GBM', 'EGFRvIII-mutant', 'MGMT unmethylated']",['glioblastoma'],,EGFR,antibody-drug conjugate,35849035
+chatcmpl-95G0Wc7vcVsPnVWNFT1pvp6WdmDPY,142.0,1227.0,1369.0,EPIC-0412,['GBM'],['Glioblastoma multiforme'],,MGMT,inhibitor,36272139
+chatcmpl-95G0Wc7vcVsPnVWNFT1pvp6WdmDPY,142.0,1227.0,1369.0,EPIC-0412,['GBM'],['Glioblastoma multiforme'],,DNA damage repair pathway,inhibitor,36272139
+chatcmpl-95G0Wc7vcVsPnVWNFT1pvp6WdmDPY,142.0,1227.0,1369.0,Temozolomide,['GBM'],['Glioblastoma multiforme'],,MGMT,affected by resistance,36272139
+chatcmpl-95G0k0UbL8wohny4ew0TYy6MdRwYA,125.0,1067.0,1192.0,trametinib,['KRAS-mutant NSCLC'],['NSCLC'],,,,36970205
+chatcmpl-95G0k0UbL8wohny4ew0TYy6MdRwYA,125.0,1067.0,1192.0,IACS-010759,['KRAS-mutant NSCLC'],['NSCLC'],,mitochondrial complex I,inhibitor,36970205
+chatcmpl-95G0saYAaUrfCOhQu1c3gMTpadCVV,63.0,1173.0,1236.0,oxamate,['glioblastoma mouse model'],['glioblastoma'],,LDHA,inhibitor,37770937
+chatcmpl-95G0yBRsUXtUh0wOtyWV2beDLD0vp,68.0,1070.0,1138.0,,['drug-tolerant cancer cells'],['lung cancer'],,APOBEC3A,suppression,37407818
+chatcmpl-95G13pzfdO8ktaDIFx0dl3d2QegvJ,118.0,1134.0,1252.0,sotorasib,,['non-small cell lung cancer'],,KRASG12C,inhibitor,37831007
+chatcmpl-95G13pzfdO8ktaDIFx0dl3d2QegvJ,118.0,1134.0,1252.0,MRTX1133,,['PDAC'],,KRASG12D,inhibitor,37831007
+chatcmpl-95G1DfT4sRewqhZcXRN4ZscVRigsZ,122.0,1069.0,1191.0,KU60019,['lung cancer cell lines'],['lung cancer'],,ATM,inhibitor,36650267
+chatcmpl-95G1DfT4sRewqhZcXRN4ZscVRigsZ,122.0,1069.0,1191.0,VP-16,['lung cancer cell lines'],"['lymphomas', 'leukemias', 'lung cancer']",,TOP2β,poison,36650267
+chatcmpl-95G1N3tD4SxuuwkXFoSVIeSa9eXK2,72.0,1171.0,1243.0,D-1553,['KRAS G12C-mutated NSCLC'],['NSCLC'],,KRAS G12C,inhibitor,36948246
+chatcmpl-95G1TOB2JLNoJjaduCTHbZff2vk02,69.0,1040.0,1109.0,Z839878730,['TNBC ALDH+ cells'],['triple negative breast cancer'],,KK-LC-1,inhibitor,37147285
+chatcmpl-95G1ZkArkiCHcOUd9E8AySTypVce7,110.0,1081.0,1191.0,PF-07284892,"['ALK fusion-positive lung cancer', 'BRAFV600E-mutant colorectal cancer', 'KRASG12D-mutant ovarian cancer', 'ROS1 fusion-positive pancreatic cancer']","['lung cancer', 'colorectal cancer', 'ovarian cancer', 'pancreatic cancer']",,SHP2,allosteric inhibitor,37269335
+chatcmpl-95G1g5yQ6OegprNN3b7yOXQfWFIkQ,79.0,1164.0,1243.0,osimertinib,['patients with metastatic non-small cell lung cancer harbouring sensitising'],"['non-small cell lung cancer', 'adenocarcinoma of the lung']",,,,36942434
+chatcmpl-95G1nxqKiYBGTSUDN9yMICj5PxE4x,79.0,1123.0,1202.0,RMC-6272,['ER+/HER2- breast cancer cell lines with PIK3CA or PTEN mutations'],['breast cancer'],,mTORC1,inhibitor,37264081
+chatcmpl-95G1sPiyukPGLKf2nGbtxgoadxB3B,105.0,1264.0,1369.0,SurVaxM,['nGBM'],['glioblastoma'],['NCT02455557'],survivin,activator,36521103
+chatcmpl-95G218yaknxBX2h9W3uVaUToVsJ9q,150.0,1075.0,1225.0,PKC inhibitors,['KRAS-mutated lung cancers'],['lung cancer'],,AURKB,inhibitor,37816716
+chatcmpl-95G2BykjOat7Iau0apHn633qMqvgp,67.0,1048.0,1115.0,pralsetinib,['CCDC6-RET fusion'],"['TNBC', 'breast cancer']",,RET,inhibitor,37141396
+,,,,,,,,,,36707509
+,,,,,,,,,,37091185
+,,,,,,,,,,37244935
+,,,,,,,,,,36821441
